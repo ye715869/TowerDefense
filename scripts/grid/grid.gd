@@ -1,4 +1,4 @@
-# Grid - 5行×9列 网格战场管理系统（美化版）
+# Grid - 5行×9列 网格战场管理系统（Area2D 重制版）
 extends Node2D
 
 const ROWS: int = 5
@@ -26,7 +26,7 @@ signal plant_removed(row: int, col: int)
 
 func _ready() -> void:
 	_initialize_grid()
-	set_process_input(true)
+	_create_click_area()
 	queue_redraw()
 
 func _process(delta: float) -> void:
@@ -40,6 +40,31 @@ func _initialize_grid() -> void:
 		for c in range(COLS):
 			row_data.append(null)
 		grid.append(row_data)
+
+# 创建覆盖整个网格的点击区域
+func _create_click_area() -> void:
+	var area = Area2D.new()
+	area.name = "ClickArea"
+	var col_shape = CollisionShape2D.new()
+	var rect = RectangleShape2D.new()
+	rect.size = Vector2(COLS * CELL_W + 20, ROWS * CELL_H + 20)
+	col_shape.shape = rect
+	col_shape.position = Vector2(OFFSET_X + COLS * CELL_W / 2.0, OFFSET_Y + ROWS * CELL_H / 2.0)
+	area.add_child(col_shape)
+	area.input_event.connect(_on_grid_click)
+	area.input_pickable = true
+	add_child(area)
+
+func _on_grid_click(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			_handle_click(event.position)
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_cancel_placement()
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_update_hover(event.position)
 
 func world_to_grid(world_pos: Vector2) -> Dictionary:
 	var col = int((world_pos.x - OFFSET_X) / CELL_W)
@@ -106,19 +131,6 @@ func get_enemies_in_range(row: int, col: int, radius: int = 1) -> Array:
 func get_sun_manager() -> Node:
 	return get_node_or_null("/root/Main/GameManager/SunManager")
 
-# ==================== 输入处理 ====================
-
-func _input(event: InputEvent) -> void:
-	# 鼠标移动悬停（始终追踪）
-	if event is InputEventMouseMotion:
-		_update_hover(event.position)
-	# 点击放在这里确保收到（不受 Control 节点拦截）
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			_handle_click(event.position)
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			_cancel_placement()
-
 func _handle_click(click_pos: Vector2) -> void:
 	var cell = world_to_grid(click_pos)
 	if not is_valid_cell(cell.row, cell.col): return
@@ -126,7 +138,7 @@ func _handle_click(click_pos: Vector2) -> void:
 	if not cb or cb.selected_plant < 0: return
 	var gm = get_node_or_null("/root/Main/GameManager")
 	if not gm: return
-	if gm.current_state != 1: return  # not PLAYING
+	if gm.current_state != 1: return
 	var pt = cb.selected_plant
 	if not is_cell_empty(cell.row, cell.col): return
 	if not gm.spend_sun(GameData.get_cost(pt)): return
@@ -138,9 +150,7 @@ func _cancel_placement() -> void:
 	if cb: cb.deselect_all()
 
 func _update_hover(mouse_pos: Vector2) -> void:
-	var cell = world_to_grid(mouse_pos)
-	if cell.row == hovered_cell.row and cell.col == hovered_cell.col: return
-	hovered_cell = cell
+	hovered_cell = world_to_grid(mouse_pos)
 
 # ==================== 渲染 ====================
 
@@ -160,9 +170,7 @@ func _draw_lawn() -> void:
 			var x = OFFSET_X + c * CELL_W
 			var y = OFFSET_Y + r * CELL_H
 			var shade = 1.0 + sin((r + c) * 1.2 + anim_time * 0.3) * 0.05
-			var c1 = Color(0.22, 0.50, 0.14) * shade
-			var c2 = Color(0.28, 0.55, 0.18) * shade
-			draw_rect(Rect2(x, y, CELL_W, CELL_H), c1 if (r + c) % 2 == 0 else c2)
+			draw_rect(Rect2(x, y, CELL_W, CELL_H), Color(0.22, 0.50, 0.14) * shade if (r + c) % 2 == 0 else Color(0.28, 0.55, 0.18) * shade)
 			_draw_grass_detail(x, y, r, c)
 
 func _draw_grass_detail(x: float, y: float, r: int, c: int) -> void:
@@ -175,20 +183,15 @@ func _draw_grass_detail(x: float, y: float, r: int, c: int) -> void:
 func _draw_grid_lines() -> void:
 	var lc = Color(0.15, 0.35, 0.10, 0.4)
 	for r in range(ROWS + 1):
-		var y = OFFSET_Y + r * CELL_H
-		draw_line(Vector2(OFFSET_X, y), Vector2(OFFSET_X + COLS * CELL_W, y), lc, 1.0)
+		draw_line(Vector2(OFFSET_X, OFFSET_Y + r * CELL_H), Vector2(OFFSET_X + COLS * CELL_W, OFFSET_Y + r * CELL_H), lc, 1.0)
 	for c in range(COLS + 1):
-		var x = OFFSET_X + c * CELL_W
-		draw_line(Vector2(x, OFFSET_Y), Vector2(x, OFFSET_Y + ROWS * CELL_H), lc, 1.0)
+		draw_line(Vector2(OFFSET_X + c * CELL_W, OFFSET_Y), Vector2(OFFSET_X + c * CELL_W, OFFSET_Y + ROWS * CELL_H), lc, 1.0)
 
 func _draw_path_markers() -> void:
-	var pc = Color(0.6, 0.55, 0.4, 0.6)
-	draw_rect(Rect2(OFFSET_X - 4, OFFSET_Y, 4, ROWS * CELL_H), pc)
+	draw_rect(Rect2(OFFSET_X - 4, OFFSET_Y, 4, ROWS * CELL_H), Color(0.6, 0.55, 0.4, 0.6))
 	for r in range(ROWS):
-		var y = OFFSET_Y + r * CELL_H + CELL_H / 2.0
-		draw_circle(Vector2(OFFSET_X - 6, y), 5, Color(0.8, 0.2, 0.2, 0.7))
-	var ec = Color(0.5, 0.2, 0.2, 0.4)
-	draw_rect(Rect2(OFFSET_X + COLS * CELL_W, OFFSET_Y, 6, ROWS * CELL_H), ec)
+		draw_circle(Vector2(OFFSET_X - 6, OFFSET_Y + r * CELL_H + CELL_H / 2.0), 5, Color(0.8, 0.2, 0.2, 0.7))
+	draw_rect(Rect2(OFFSET_X + COLS * CELL_W, OFFSET_Y, 6, ROWS * CELL_H), Color(0.5, 0.2, 0.2, 0.4))
 
 func _draw_hover() -> void:
 	if not is_valid_cell(hovered_cell.row, hovered_cell.col): return

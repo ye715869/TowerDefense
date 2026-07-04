@@ -1,17 +1,12 @@
-# PlantCard - 植物选择卡片（美化版）
+# PlantCard - 植物选择卡片（Button 重制版）
 class_name PlantCard
 extends Control
 
 var plant_type: int = -1
 var is_selected: bool = false
 var is_affordable: bool = true
-var anim_time: float = 0.0
 
 signal card_clicked(plant_type: int)
-
-func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	gui_input.connect(_on_gui_input)
 
 func setup(type: int) -> void:
 	plant_type = type
@@ -20,28 +15,43 @@ func setup(type: int) -> void:
 	var color = data.get("color", Color.WHITE)
 	var cost = data.get("cost", 0)
 	var name = data.get("name", "???")
-	var desc = data.get("description", "")
 
-	# 卡片背景面板
-	var panel = Panel.new()
-	panel.size = Vector2(98, 85)
-	panel.position = Vector2(0, 0)
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.25, 0.2, 0.15)
-	style.border_width_left = 2; style.border_width_right = 2
-	style.border_width_top = 2; style.border_width_bottom = 2
-	style.border_color = Color(0.5, 0.4, 0.3)
-	style.corner_radius_top_left = 6; style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6; style.corner_radius_bottom_right = 6
-	panel.add_theme_stylebox_override("panel", style)
-	add_child(panel)
+	# 使用 Button 确保点击可靠
+	var btn = Button.new()
+	btn.name = "CardBtn"
+	btn.flat = true
+	btn.size = Vector2(98, 85)
+	btn.position = Vector2(0, 0)
+	btn.pressed.connect(_on_pressed)
+	add_child(btn)
+
+	# 自定义按钮样式
+	var normal_style = StyleBoxFlat.new()
+	normal_style.bg_color = Color(0.25, 0.2, 0.15)
+	normal_style.border_width_left = 2; normal_style.border_width_right = 2
+	normal_style.border_width_top = 2; normal_style.border_width_bottom = 2
+	normal_style.border_color = Color(0.5, 0.4, 0.3)
+	normal_style.corner_radius_top_left = 6; normal_style.corner_radius_top_right = 6
+	normal_style.corner_radius_bottom_left = 6; normal_style.corner_radius_bottom_right = 6
+	btn.add_theme_stylebox_override("normal", normal_style)
+
+	var hover_style = StyleBoxFlat.new()
+	hover_style.bg_color = Color(0.3, 0.25, 0.18)
+	hover_style.border_width_left = 2; hover_style.border_width_right = 2
+	hover_style.border_width_top = 2; hover_style.border_width_bottom = 2
+	hover_style.border_color = Color(0.7, 0.55, 0.4)
+	hover_style.corner_radius_top_left = 6; hover_style.corner_radius_top_right = 6
+	hover_style.corner_radius_bottom_left = 6; hover_style.corner_radius_bottom_right = 6
+	btn.add_theme_stylebox_override("hover", hover_style)
 
 	# 植物圆形图标
 	var icon = ColorRect.new()
+	icon.name = "Icon"
 	icon.color = color
 	icon.size = Vector2(40, 40)
 	icon.position = Vector2(29, 6)
-	add_child(icon)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(icon)
 
 	# 名字
 	var name_label = Label.new()
@@ -51,7 +61,8 @@ func setup(type: int) -> void:
 	name_label.position = Vector2(4, 48)
 	name_label.size = Vector2(90, 14)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(name_label)
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(name_label)
 
 	# 费用
 	var cost_label = Label.new()
@@ -62,28 +73,34 @@ func setup(type: int) -> void:
 	cost_label.position = Vector2(4, 62)
 	cost_label.size = Vector2(90, 18)
 	cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(cost_label)
+	cost_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(cost_label)
 
-func _on_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT: card_clicked.emit(plant_type)
+func _on_pressed() -> void:
+	card_clicked.emit(plant_type)
 
 func set_selected(selected: bool) -> void:
 	is_selected = selected
-	var panel = get_child(0) if get_child_count() > 0 and get_child(0) is Panel else null
-	if panel:
-		var style = panel.get_theme_stylebox("panel") as StyleBoxFlat
-		if style:
-			if selected:
-				style.bg_color = Color(0.3, 0.25, 0.15)
-				style.border_color = Color(1.0, 0.85, 0.2)
-				style.border_width_left = 3; style.border_width_right = 3
-				style.border_width_top = 3; style.border_width_bottom = 3
-			else:
-				style.bg_color = Color(0.25, 0.2, 0.15)
-				style.border_color = Color(0.5, 0.4, 0.3)
-				style.border_width_left = 2; style.border_width_right = 2
-				style.border_width_top = 2; style.border_width_bottom = 2
+	var btn = get_node_or_null("CardBtn")
+	if not btn: return
+	if selected:
+		var sel_style = StyleBoxFlat.new()
+		sel_style.bg_color = Color(0.3, 0.25, 0.15)
+		sel_style.border_width_left = 3; sel_style.border_width_right = 3
+		sel_style.border_width_top = 3; sel_style.border_width_bottom = 3
+		sel_style.border_color = Color(1.0, 0.85, 0.2)
+		sel_style.corner_radius_top_left = 6; sel_style.corner_radius_top_right = 6
+		sel_style.corner_radius_bottom_left = 6; sel_style.corner_radius_bottom_right = 6
+		btn.add_theme_stylebox_override("normal", sel_style)
+	else:
+		var normal_style = StyleBoxFlat.new()
+		normal_style.bg_color = Color(0.25, 0.2, 0.15)
+		normal_style.border_width_left = 2; normal_style.border_width_right = 2
+		normal_style.border_width_top = 2; normal_style.border_width_bottom = 2
+		normal_style.border_color = Color(0.5, 0.4, 0.3)
+		normal_style.corner_radius_top_left = 6; normal_style.corner_radius_top_right = 6
+		normal_style.corner_radius_bottom_left = 6; normal_style.corner_radius_bottom_right = 6
+		btn.add_theme_stylebox_override("normal", normal_style)
 
 func _process(_delta: float) -> void:
 	var gm = get_node_or_null("/root/Main/GameManager")
@@ -92,7 +109,7 @@ func _process(_delta: float) -> void:
 		if affordable != is_affordable:
 			is_affordable = affordable
 			modulate = Color.WHITE if affordable else Color(0.5, 0.5, 0.5)
-			# 费用文字变红/正常
-			var cl = get_node_or_null("CostLabel")
+			var cl = get_node_or_null("CardBtn/CostLabel")
 			if cl and cl is Label:
-				cl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2) if affordable else Color(0.8, 0.3, 0.3))
+				var col = Color(1.0, 0.85, 0.2) if affordable else Color(0.8, 0.3, 0.3)
+				cl.add_theme_color_override("font_color", col)
