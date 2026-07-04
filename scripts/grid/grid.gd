@@ -29,6 +29,7 @@ signal plant_removed(row: int, col: int)
 
 func _ready() -> void:
 	_initialize_grid()
+	queue_redraw()
 
 func _initialize_grid() -> void:
 	grid.clear()
