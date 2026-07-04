@@ -44,16 +44,35 @@ func _process(delta: float) -> void:
 	if is_slowed:
 		slow_timer -= delta
 		if slow_timer <= 0: _remove_slow()
-	if is_attacking:
+
+	# 每帧实时检测前方植物（无缓存，植物死后自动消失）
+	var tower = _find_tower_ahead()
+
+	if tower:
+		# 有植物挡住 — 停下攻击
+		is_attacking = true
+		attack_timer -= delta
+		if attack_timer <= 0:
+			tower.take_damage(damage)
+			attack_timer = 1.0
+		queue_redraw()
+		return
+
+	if position.x <= 40.0:
+		# 到达基地 — 攻击基地
+		is_attacking = true
 		attack_timer -= delta
 		if attack_timer <= 0:
 			_deal_damage_to_base()
 			attack_timer = 1.0
 		queue_redraw()
 		return
+
+	# 无阻挡、未到基地 — 前进
+	is_attacking = false
+	attack_timer = 0  # 重置计时器，确保下次遇到植物立即出手
 	position.x -= speed * delta
 	col = int((position.x - 40.0) / 100.0)
-	if position.x <= 40.0: _on_reach_base()
 	queue_redraw()
 
 func take_damage(amount: float) -> void:
@@ -73,9 +92,17 @@ func _remove_slow() -> void:
 	speed = base_speed
 	is_slowed = false
 
-func _on_reach_base() -> void:
-	is_attacking = true
-	attack_timer = 1.0
+func _find_tower_ahead() -> Node2D:
+	"""检测当前所在格子是否有存活的植物（僵尸与植物可在同一格）"""
+	var grid_node = get_node_or_null("/root/Main/Battlefield/Grid")
+	if not grid_node: return null
+	if col < 0 or col >= 9: return null
+	# 只检查当前格，僵尸走到植物所在格才停，实现同格啃咬
+	if grid_node.get_plant_at(row, col) != null:
+		for tower in get_tree().get_nodes_in_group("towers"):
+			if tower.is_alive and tower.row == row and tower.col == col:
+				return tower
+	return null
 
 func _deal_damage_to_base() -> void:
 	if game_manager and game_manager.has_method("damage_base"):
@@ -83,10 +110,6 @@ func _deal_damage_to_base() -> void:
 
 func _die() -> void:
 	is_alive = false
-	# 死亡奖励
-	if game_manager and game_manager.has_method("add_sun_reward"):
-		game_manager.add_sun_reward(reward)
-	# 死亡粒子效果
 	_spawn_death_effect()
 	queue_free()
 
@@ -153,7 +176,7 @@ func _draw_zombie_shape(ox: float, oy: float, color: Color, lean: float) -> void
 func _draw_hp_bar() -> void:
 	var ratio = clamp(health / max_health, 0.0, 1.0)
 	var bw = 46.0
-	var by = -50
+	var by = 25
 	draw_rect(Rect2(-bw / 2, by, bw, 4), Color(0.1, 0.1, 0.1, 0.8))
 	draw_rect(Rect2(-bw / 2, by, bw * ratio, 4), Color(0.85, 0.15, 0.15))
 

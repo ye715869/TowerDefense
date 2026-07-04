@@ -11,7 +11,6 @@ var anim_time: float = 0.0
 
 func _ready() -> void:
 	add_to_group("projectiles")
-	body_entered.connect(_on_body_entered)
 
 func setup(dmg: float, spd: float, dir: Vector2, slow_amt: float = 0.0, slow_dur: float = 0.0) -> void:
 	damage = dmg; speed = spd; direction = dir
@@ -20,16 +19,20 @@ func setup(dmg: float, spd: float, dir: Vector2, slow_amt: float = 0.0, slow_dur
 func _process(delta: float) -> void:
 	anim_time += delta
 	position += direction * speed * delta
-	if position.x > 1200 or position.x < -100: queue_free()
-	queue_redraw()
-
-func _on_body_entered(body: Node2D) -> void:
-	if body.is_in_group("enemies") and body.has_method("take_damage"):
-		body.take_damage(damage)
-		if slow_amount > 0: body.apply_slow(slow_amount, slow_duration)
-		# 命中火花
-		_spawn_hit_spark(body.global_position)
+	if position.x > 1200 or position.x < -100:
 		queue_free()
+		return
+	# 手动碰撞检测 — Enemy 是 Node2D 非物理体，body_entered 不会触发
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not enemy.has_method("take_damage"): continue
+		if not enemy.is_alive: continue
+		if enemy.global_position.distance_to(global_position) < 30:
+			enemy.take_damage(damage)
+			if slow_amount > 0: enemy.apply_slow(slow_amount, slow_duration)
+			_spawn_hit_spark(enemy.global_position)
+			queue_free()
+			return
+	queue_redraw()
 
 func _spawn_hit_spark(hit_pos: Vector2) -> void:
 	for i in range(4):

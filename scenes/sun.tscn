@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/ui/sun.gd" id="1_sun"]
 
 [sub_resource type="CircleShape2D" id="1_circle"]
-radius = 20.0
+radius = 30.0
 
 [node name="Sun" type="Area2D"]
 script = ExtResource("1_sun")

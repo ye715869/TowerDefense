@@ -26,6 +26,12 @@ GameData="*res://scripts/data/plant_data.gd"
 EnemyData="*res://scripts/data/enemy_data.gd"
 WaveConfig="*res://scripts/data/wave_data.gd"
 
+[display]
+
+window/size/viewport_width=1000
+window/size/viewport_height=750
+window/size/resizable=false
+
 [input]
 
 click="MouseButton(1)"

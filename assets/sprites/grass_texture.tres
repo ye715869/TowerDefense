@@ -1,0 +1,22 @@
+[gd_resource type="NoiseTexture2D" load_steps=3 format=3 uid="uid://grass_noise_tex"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_grass"]
+noise_type = 3  ; Simplex
+frequency = 0.025
+fractal_type = 2  ; FBm
+fractal_octaves = 5
+fractal_lacunarity = 2.4
+fractal_gain = 0.5
+fractal_weighted_strength = 0.8
+
+[sub_resource type="Gradient" id="Gradient_grass"]
+; 4-stop gradient: soil → dark green → mid green → light green highlight
+colors = PackedColorArray(0.22, 0.14, 0.06, 1, 0.14, 0.38, 0.08, 1, 0.32, 0.55, 0.16, 1, 0.50, 0.68, 0.28, 1)
+offsets = PackedFloat32Array(0, 0.3, 0.6, 1)
+
+[resource]
+noise = SubResource("FastNoiseLite_grass")
+width = 512
+height = 512
+seamless = true
+color_ramp = SubResource("Gradient_grass")

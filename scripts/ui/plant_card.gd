@@ -1,4 +1,4 @@
-# PlantCard - 植物选择卡片（Button 重制版）
+# PlantCard - 植物选择卡片（PvZ风格图标）
 class_name PlantCard
 extends Control
 
@@ -44,13 +44,11 @@ func setup(type: int) -> void:
 	hover_style.corner_radius_bottom_left = 6; hover_style.corner_radius_bottom_right = 6
 	btn.add_theme_stylebox_override("hover", hover_style)
 
-	# 植物圆形图标
-	var icon = ColorRect.new()
+	# PvZ风格植物图标
+	var icon = PlantIcon.new()
 	icon.name = "Icon"
-	icon.color = color
-	icon.size = Vector2(40, 40)
-	icon.position = Vector2(29, 6)
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.position = Vector2(49, 24)  # 卡片中居中
+	icon.setup(type)
 	btn.add_child(icon)
 
 	# 名字

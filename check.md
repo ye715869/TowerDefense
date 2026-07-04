@@ -71,3 +71,132 @@
   - 12 个文件修改，植物可放置，敌人正常刷新
 - **用户反馈**：植物可以放置了，也有敌人刷新，验收通过
 - **状态**：✅ 达到预期
+
+## 步骤 5：修复植物交互机制（阳光生产 + 攻击 + 僵尸啃咬）
+
+- **时间**：2026-07-04
+- **用户要求**：重新检查向日葵产生阳光和豌豆射手攻击机制，向日葵不产生阳光豌豆射手也不攻击，僵尸遇到植物也不会啃咬
+- **我的理解**：三个功能全部失效，需要逐一排查根因：
+  1. **向日葵不产阳光 + 豌豆不攻击**：`tower.gd` 中 `@onready var grid_ref = null` 在 `_ready()` 阶段把 `setup()` 中赋值好的 `grid_ref` 覆盖为 null，导致 `_produce_sun()` 和 `_attack()` 都在 `if not grid_ref` 处提前返回
+  2. **子弹打不中敌人**：`Projectile` 用 `body_entered` 信号检测碰撞，但 `Enemy` 继承 `Node2D`（非物理体），`body_entered` 永远不会触发
+  3. **僵尸不啃植物**：`Enemy` 从头到尾没有检测前方植物的逻辑，只会走到最左侧攻击基地
+  4. **阳光不显示（第二轮排查）**：Sun 被添加到 SunManager（GameManager子节点），而 GameManager 在场景树中排在 Battlefield 前面，导致 Sun 绘制在战场后面被完全遮挡
+- **预期结果**：向日葵每10秒产25阳光、豌豆射手每0.5秒射击并命中敌人、僵尸遇到植物停下攻击
+- **工作成果**：
+  - `tower.gd:26`：`@onready var grid_ref` → `var grid_ref`（去掉 @onready）
+  - `projectile.gd:12-35`：删除 `body_entered` 信号，改为 `_process()` 中手动遍历 "enemies" 组做距离检测
+  - `enemy.gd:18-20,42-117`：新增 `attack_target` 变量、`_find_tower_ahead()` 方法、重写 `_process` 攻击状态机
+  - `sun_manager.gd:22-59`：新增 `_get_battlefield()` 方法，阳光改为添加到 Battlefield 节点（而非 SunManager）确保不被战场遮盖
+- **用户反馈**：向日葵还是不掉阳光，豌豆射手正常了
+- **第2次修正意见**：发现阳光被绘制在战场后面的渲染层级问题，修改 sun_manager.gd 将阳光父节点改为 Battlefield
+- **第3次修正意见**：樱桃炸弹bug依旧存在（贴图丢失 + 对僵尸无伤害）
+- **第3次修正内容**：
+  - **根因分析**：对比 4 个正常工作的植物脚本（Peashooter、SnowPea、Sunflower、WallNut），发现它们要么不重写 `_process`，要么在重写时调用 `super._process(delta)` 以保证 Tower 基类的 anim_time、attack_timer、queue_redraw 正常运行。CherryBomb 是唯一一个重写 `_process` 却不调用 `super._process(delta)` 的脚本。
+  - `cherry_bomb.gd` 完全重写：
+    - `_process` 现在调用 `super._process(delta)`（对齐 Peashooter 模式）
+    - 废弃自定义 `explode_timer`，改用继承的 `attack_timer`（`setup()` 中 attack_speed=1.0 → 1秒后自动触发 `_attack()`）
+    - `_attack()` 负责执行爆炸逻辑（替代旧 `_explode` 的手动计时触发）
+    - `_draw()` 现在调用 `super._draw()` 先画基类植物本体，再加红色闪烁覆盖层和倒计时数字
+    - 修复 `draw_string(..., 2)` 参数错误：末尾的 `2` 被 Godot 的 `Color(int)` 构造器解析为 RGBA8 编码，等效于 `Color(0,0,0,0.008)`（几乎透明），可能导致渲染异常
+  - 添加 `print()` 调试日志，可在 Godot 输出控制台追踪爆炸时机和命中判定
+- **第4次修正意见**：植物无法和僵尸放在同一图格，要求修改为：植物和僵尸可同格、僵尸可互相叠加、植物间不可叠加、僵尸吃植物时同格处理
+- **第4次修正内容**：
+  - `enemy.gd` `_find_tower_ahead()`：从检查 `[col, col-1]`（前方一格提前停）改为只检查 `[col]`（当前格）。僵尸走到植物所在格子才停下啃咬。
+  - 植物放置：`grid.is_cell_empty()` 只检查植物 grid 数组，不检查僵尸位置 → 植物可在有僵尸的格子上放置 ✓
+  - 僵尸互相叠加：Enemy 是 Node2D，无碰撞体 → 多个僵尸可在同一位置叠加 ✓
+  - 植物间不可叠加：`is_cell_empty` 检查 plant grid → 已有植物的格子不能再放 ✓
+  - 僵尸啃咬同格处理：敌方走到植物 col 时 stoop，`take_damage` 直接从同一 cell 攻击 ✓
+- **状态**：✅ 达到预期（用户后续继续提出新需求）
+
+## 步骤 6：作弊模式清冷却 + 动态常态化刷新 + 波数缩放
+
+- **时间**：2026-07-04
+- **用户要求**：新增按下作弊模式后立刻刷新所有植物冷却，调整常态化刷新机制，常态化刷新速度由游戏进度决定，当第0波时，刷新速度开始为每隔10s一只僵尸，每刷新一只僵尸增快速度，每一波常态刷新速度上限为每5s刷新只数等于波数，当当前波数下常态化刷新僵尸只数等于15*波数时进行波数刷新，调整波数刷新，每波刷新的僵尸数目为15*波数
+- **我的理解**：
+  1. **作弊模式清冷却**：开启作弊时，所有正在冷却的植物立即清除冷却
+  2. **动态常态化刷新**：
+     - 波数概念：wave_num=0（第0波，即第一波之前）、wave_num=1（第一波后）、wave_num=2（第二波后）
+     - 第0波：初始间隔 10s/只，每刷一只加速（间隔递减），上限为 5s/只（= 每5秒刷1只 = 波数1的速率上限）
+     - 第1波后：上限为 2.5s/只（= 每5秒刷2只）
+     - 第2波后：上限为 1.67s/只（= 每5秒刷3只）
+     - 每个常态阶段，间隔线性递减，在达到触发数量时正好到达速率上限
+  3. **触发波次条件**：常态刷新数量 = 15 × (当前wave_num+1) 时触发下一波
+     - wave_num=0 → 刷满15只触发第1波
+     - wave_num=1 → 刷满30只触发第2波
+     - wave_num=2 → 刷满45只触发第3波（最终波）
+  4. **波次刷新数量**：每波刷新 15 × (wave_num+1) 只僵尸
+     - 第1波：15只 | 第2波：30只 | 第3波：45只
+  5. 总波数仍为3不变
+- **预期结果**：作弊模式一键清冷却；常态化刷新从慢到快随进度加速；每波僵尸数量递增（15→30→45）；波次触发条件随波数递增
+- **修改文件**：
+  - `game_manager.gd`：`toggle_cheat()` 开启时清除所有冷却
+  - `wave_manager.gd`：重写常态化刷新逻辑（动态间隔+速率上限+触发条件+波数数量）
+- **工作成果**：
+  - `game_manager.gd`：`toggle_cheat()` 中新增 `for pt in cooldowns.keys()` 循环，开启作弊时遍历清除所有冷却并发射 `cooldown_updated(pt, 0.0)` 信号
+  - `wave_manager.gd` 完全重写：
+    - 新增动态参数：`normal_interval_cap`、`normal_spawn_speedup`、`normal_trigger_count`、`wave_spawn_total`
+    - `_start_normal_spawning()`：根据 `wave_num+1` 计算速率上限 `5.0/upcoming`、触发阈值 `15*upcoming`、每只加速量 `(interval-cap)/trigger_count`
+    - 每刷一只僵尸：`normal_interval -= normal_spawn_speedup`，不低於 cap
+    - 波次刷怪数：第1波15只 / 第2波30只 / 第3波45只（`15 * wave_num`）
+    - `get_wave_info()` 新增 `normal_trigger`、`normal_interval`、`wave_total` 字段用于调试
+    - 常态化间隔在波次之间持续加速不重置（从上次 cap 继续向新 cap 递减）
+- **用户反馈**：待验证
+- **状态**：✅ 达到预期（用户后续继续提出新需求）
+
+## 步骤 7：修复铲除 + 放大阳光 + 白色光晕 + 鼠标样式 + 左上角图标
+
+- **时间**：2026-07-04
+- **用户要求**：铲除功能无法使用，放大掉落的阳光图案和互动范围大小，给阳光图案外层加上白色光晕，鼠标移动到上面改变鼠标样式为点击，左上角黄色图标改成阳光图标
+- **我的理解**：
+  1. **铲除功能**：铲子按钮无信号连接 → 添加 shovel_mode，点击铲子进入铲除模式，再点格子移除植物
+  2. **阳光放大**：绘制半径从~13→~22，碰撞体半径从20→30
+  3. **白色光晕**：在阳光最外层加白色半透明光圈
+  4. **鼠标样式**：阳光 Area2D 的 mouse_entered/exited 切换光标为手型
+  5. **左上角图标**：黄色 ColorRect 替换为绘制的太阳图标（带光晕和射线）
+- **预期结果**：铲子可铲除植物；阳光更大更好点；白色光晕；悬停变手型；左上角显示精致太阳图标
+- **工作成果**：
+  - `card_bar.gd`：新增 `shovel_mode` + `_on_shovel_pressed()` → 点击铲子进入铲除模式（按钮变红"取消"、光标变十字）、`_exit_shovel_mode()` 恢复；选植物卡片自动退出铲除模式
+  - `grid.gd`：`_handle_click()` 优先检测铲除模式 → `_remove_plant_at()` 查找目标格子植物并 `queue_free` + `remove_plant`；`_draw_hover()` 铲除模式下红色高亮有植物格子；`_cancel_placement()` 右键同时退出铲除模式
+  - `sun.gd`：绘制半径 13→20（主体）、新增最外层白色光晕（3层）、中层金色光晕放大、射线加粗加长；`mouse_entered`→手型光标、`mouse_exited`→箭头、收集后恢复箭头
+  - `sun.tscn`：碰撞体 `CircleShape2D` 半径 20→30
+  - `hud.gd`：左上角黄色 ColorRect → 圆角金色边框 Panel + "☀" emoji Label（26号字体、金色）
+- **用户反馈**：待验证
+- **状态**：✅ 达到预期（用户后续继续提出新需求）
+
+## 步骤 8：修复图标重叠 + 菜单按钮 + 阳光收集飞行动画
+
+- **时间**：2026-07-04
+- **用户要求**：左上角图标发生重复的情况，请调整至美观状态，新增菜单按钮，打开菜单自动暂停，菜单包含全屏，重新开始，退出游戏三个选项，新增点击阳光时阳光运动到左上角的动画
+- **我的理解**：
+  1. **图标重叠**：之前嵌套了两层 Panel（sun_bg + sun_icon_bg内嵌Panel），导致视觉重复 → 去掉内嵌面板，只保留一个emoji标签
+  2. **菜单按钮**：顶部栏右侧新增"☰ 菜单"按钮 → 打开菜单覆盖层 → `get_tree().paused = true` → 选项：切换全屏、重新开始、退出游戏 → 关闭/按X恢复
+  3. **阳光飞行动画**：点击阳光后不再原地消失，而是用 Tween 将阳光从当前位置飞到左上角阳光计数器位置（0.35秒），同时缩小到25%，到达后增加阳光数
+- **预期结果**：左上角干净无重叠；菜单可暂停游戏并切换全屏；阳光点击后飞向计数区
+- **工作成果**：
+  - `hud.gd`：
+    - 简化阳光区域：移除嵌套 `sun_icon_bg` Panel，保留单独的 "☀" emoji 标签（22号字体、金色）和阳光数字标签
+    - 新增菜单按钮 "☰ 菜单"（深色44×44方钮，右侧）
+    - 新增 `_create_menu_overlay()`：半透明背景 + 中央面板 + 切换全屏/重新开始/退出 + 右上角X关闭
+    - 新增 `_on_menu_pressed()`：`get_tree().paused = true` 暂停 + 显示菜单
+    - 新增 `_close_menu()`：`get_tree().paused = false` 恢复
+    - 新增 `_on_fullscreen_toggle()`：`DisplayServer.window_get/set_mode` 切换全屏/窗口
+    - 新增 `_on_menu_restart()`：恢复暂停 + 关闭菜单 + 重启游戏
+    - 菜单覆盖层 `process_mode = PROCESS_MODE_ALWAYS` 确保暂停时仍可交互
+  - `sun.gd`：
+    - `_collect()` 重写：获取 `canvas_transform` 将屏幕坐标转世界坐标，Tween `global_position` 飞到 (70, 35) + `scale` 缩小到 0.25（0.35秒 cubic easing），完成后 `_finish_collect()` 加阳光 + queue_free
+    - `_process()` 调整：已收集的飞行中阳光继续更新 `anim_time` + `queue_redraw()` 保持光晕动画
+    - 收集时禁用 `CollisionShape2D` 防止重复点击
+- **用户反馈**：待验证
+- **状态**：✅ 达到预期（后续导出为EXE成功）
+
+## 步骤 9：导出 Windows EXE
+
+- **时间**：2026-07-04 20:23
+- **用户要求**：导出为exe文件
+- **工作成果**：
+  - 创建 `export_presets.cfg`（Windows Desktop 预设，x86_64 release）
+  - 从 GitHub 下载 Godot 4.7 stable 导出模板（1.19GB tpz）
+  - 解压安装到 `AppData/Roaming/Godot/export_templates/4.7.stable/`
+  - 使用 Godot CLI headless 模式成功导出：`TowerDefense.exe`（104MB）+ `TowerDefense.pck`（97KB）
+  - 输出路径：`C:\Users\ye\Desktop\TowerDefense.exe`
+- **状态**：✅ 达到预期
