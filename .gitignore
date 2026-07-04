@@ -1,1 +1,21 @@
-node_modules/\n*.log\n.godot/
+# Godot
+.godot/
+*.import
+*.translation
+export/
+
+# Godot 4+ UID cache
+uid_cache.cache
+
+# Build outputs
+build/
+export/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/

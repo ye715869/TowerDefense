@@ -1,0 +1,36 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/managers/game_manager.gd" id="1_gm"]
+[ext_resource type="Script" path="res://scripts/managers/sun_manager.gd" id="2_sm"]
+[ext_resource type="Script" path="res://scripts/managers/wave_manager.gd" id="3_wm"]
+[ext_resource type="Script" path="res://scripts/grid/grid.gd" id="4_grid"]
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="5_hud"]
+[ext_resource type="Script" path="res://scripts/ui/card_bar.gd" id="6_cb"]
+
+[node name="Main" type="Node"]
+
+[node name="GameManager" type="Node" parent="."]
+script = ExtResource("1_gm")
+
+[node name="SunManager" type="Node" parent="GameManager"]
+script = ExtResource("2_sm")
+
+[node name="WaveManager" type="Node" parent="GameManager"]
+script = ExtResource("3_wm")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("5_hud")
+
+[node name="Battlefield" type="Node2D" parent="."]
+
+[node name="Grid" type="Node2D" parent="Battlefield"]
+script = ExtResource("4_grid")
+
+[node name="Towers" type="Node2D" parent="Battlefield"]
+
+[node name="Enemies" type="Node2D" parent="Battlefield"]
+
+[node name="CardBar" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("6_cb")
