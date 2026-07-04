@@ -88,4 +88,4 @@ func deselect_all() -> void:
 
 func _on_next_wave() -> void:
 	var gm = get_node_or_null("/root/Main/GameManager")
-	if gm and gm.current_state == gm.GameState.PLAYING: gm.next_wave()
+	if gm and gm.current_state == 1: gm.next_wave()  # PLAYING

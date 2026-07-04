@@ -11,7 +11,7 @@ func _ready() -> void:
 	sky_fall_timer = sky_fall_interval
 
 func _process(delta: float) -> void:
-	if not game_manager or game_manager.current_state != game_manager.GameState.PLAYING:
+	if not game_manager or game_manager.current_state != 1:
 		return
 
 	sky_fall_timer -= delta

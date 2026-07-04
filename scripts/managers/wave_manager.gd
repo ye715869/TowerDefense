@@ -65,7 +65,7 @@ func spawn_wave(wave_num: int) -> void:
 func _process(delta: float) -> void:
 	if not is_spawning:
 		return
-	if not game_manager or game_manager.current_state != game_manager.GameState.PLAYING:
+	if not game_manager or game_manager.current_state != 1:  # PLAYING
 		return
 
 	spawn_timer -= delta

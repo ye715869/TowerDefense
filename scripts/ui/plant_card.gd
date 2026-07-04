@@ -10,6 +10,7 @@ var anim_time: float = 0.0
 signal card_clicked(plant_type: int)
 
 func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	gui_input.connect(_on_gui_input)
 
 func setup(type: int) -> void:

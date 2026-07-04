@@ -26,6 +26,7 @@ signal plant_removed(row: int, col: int)
 
 func _ready() -> void:
 	_initialize_grid()
+	set_process_input(true)
 	queue_redraw()
 
 func _process(delta: float) -> void:
@@ -105,14 +106,18 @@ func get_enemies_in_range(row: int, col: int, radius: int = 1) -> Array:
 func get_sun_manager() -> Node:
 	return get_node_or_null("/root/Main/GameManager/SunManager")
 
+# ==================== 输入处理 ====================
+
 func _input(event: InputEvent) -> void:
+	# 鼠标移动悬停（始终追踪）
+	if event is InputEventMouseMotion:
+		_update_hover(event.position)
+	# 点击放在这里确保收到（不受 Control 节点拦截）
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_handle_click(event.position)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			_cancel_placement()
-	if event is InputEventMouseMotion:
-		_update_hover(event.position)
 
 func _handle_click(click_pos: Vector2) -> void:
 	var cell = world_to_grid(click_pos)
@@ -121,6 +126,7 @@ func _handle_click(click_pos: Vector2) -> void:
 	if not cb or cb.selected_plant < 0: return
 	var gm = get_node_or_null("/root/Main/GameManager")
 	if not gm: return
+	if gm.current_state != 1: return  # not PLAYING
 	var pt = cb.selected_plant
 	if not is_cell_empty(cell.row, cell.col): return
 	if not gm.spend_sun(GameData.get_cost(pt)): return
@@ -136,7 +142,7 @@ func _update_hover(mouse_pos: Vector2) -> void:
 	if cell.row == hovered_cell.row and cell.col == hovered_cell.col: return
 	hovered_cell = cell
 
-# ============== 渲染 ==============
+# ==================== 渲染 ====================
 
 func _draw() -> void:
 	_draw_lawn()
@@ -147,11 +153,8 @@ func _draw() -> void:
 func _draw_lawn() -> void:
 	var total_w = COLS * CELL_W
 	var total_h = ROWS * CELL_H
-	# 外围深色土壤
 	draw_rect(Rect2(OFFSET_X - 8, OFFSET_Y - 8, total_w + 16, total_h + 16), Color(0.25, 0.18, 0.1), true)
-	# 整体草地底色
 	draw_rect(Rect2(OFFSET_X, OFFSET_Y, total_w, total_h), Color(0.25, 0.45, 0.15))
-	# 每个格子
 	for r in range(ROWS):
 		for c in range(COLS):
 			var x = OFFSET_X + c * CELL_W
@@ -160,7 +163,6 @@ func _draw_lawn() -> void:
 			var c1 = Color(0.22, 0.50, 0.14) * shade
 			var c2 = Color(0.28, 0.55, 0.18) * shade
 			draw_rect(Rect2(x, y, CELL_W, CELL_H), c1 if (r + c) % 2 == 0 else c2)
-			# 草地纹理点
 			_draw_grass_detail(x, y, r, c)
 
 func _draw_grass_detail(x: float, y: float, r: int, c: int) -> void:
@@ -171,25 +173,22 @@ func _draw_grass_detail(x: float, y: float, r: int, c: int) -> void:
 		draw_circle(Vector2(gx, gy), 2.0, Color(0.15, 0.40, 0.10, 0.3))
 
 func _draw_grid_lines() -> void:
-	var line_color = Color(0.15, 0.35, 0.10, 0.4)
+	var lc = Color(0.15, 0.35, 0.10, 0.4)
 	for r in range(ROWS + 1):
 		var y = OFFSET_Y + r * CELL_H
-		draw_line(Vector2(OFFSET_X, y), Vector2(OFFSET_X + COLS * CELL_W, y), line_color, 1.0)
+		draw_line(Vector2(OFFSET_X, y), Vector2(OFFSET_X + COLS * CELL_W, y), lc, 1.0)
 	for c in range(COLS + 1):
 		var x = OFFSET_X + c * CELL_W
-		draw_line(Vector2(x, OFFSET_Y), Vector2(x, OFFSET_Y + ROWS * CELL_H), line_color, 1.0)
+		draw_line(Vector2(x, OFFSET_Y), Vector2(x, OFFSET_Y + ROWS * CELL_H), lc, 1.0)
 
 func _draw_path_markers() -> void:
-	# 左侧小径（敌人目标）
-	var path_color = Color(0.6, 0.55, 0.4, 0.6)
-	draw_rect(Rect2(OFFSET_X - 4, OFFSET_Y, 4, ROWS * CELL_H), path_color)
-	# "基地"标记
+	var pc = Color(0.6, 0.55, 0.4, 0.6)
+	draw_rect(Rect2(OFFSET_X - 4, OFFSET_Y, 4, ROWS * CELL_H), pc)
 	for r in range(ROWS):
 		var y = OFFSET_Y + r * CELL_H + CELL_H / 2.0
 		draw_circle(Vector2(OFFSET_X - 6, y), 5, Color(0.8, 0.2, 0.2, 0.7))
-	# 右侧敌人入口
-	var entry_color = Color(0.5, 0.2, 0.2, 0.4)
-	draw_rect(Rect2(OFFSET_X + COLS * CELL_W, OFFSET_Y, 6, ROWS * CELL_H), entry_color)
+	var ec = Color(0.5, 0.2, 0.2, 0.4)
+	draw_rect(Rect2(OFFSET_X + COLS * CELL_W, OFFSET_Y, 6, ROWS * CELL_H), ec)
 
 func _draw_hover() -> void:
 	if not is_valid_cell(hovered_cell.row, hovered_cell.col): return
