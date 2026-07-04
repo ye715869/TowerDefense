@@ -20,7 +20,7 @@ var plants = {
 		"attack_speed": 0.0,      # 不攻击
 		"range": 0,               # 不攻击
 		"sun_production": 25,     # 每次生产阳光量
-		"sun_interval": 8.0,      # 生产间隔（秒）
+		"sun_interval": 10.0,     # 生产间隔（秒）
 		"color": Color(1.0, 0.9, 0.2),   # 黄色
 		"description": "生产阳光",
 	},
@@ -29,7 +29,7 @@ var plants = {
 		"cost": 100,
 		"health": 100,
 		"damage": 20,
-		"attack_speed": 1.5,      # 攻击间隔（秒）
+		"attack_speed": 0.5,      # 攻击间隔（秒）
 		"range": 9999,            # 直线无限射程
 		"sun_production": 0,
 		"sun_interval": 0.0,
