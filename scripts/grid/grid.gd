@@ -1,20 +1,17 @@
-# Grid - 5行×9列 网格战场管理系统
+# Grid - 5行×9列 网格战场管理系统（美化版）
 extends Node2D
 
 const ROWS: int = 5
 const COLS: int = 9
-const CELL_WIDTH: int = 100
-const CELL_HEIGHT: int = 100
-const GRID_OFFSET_X: int = 40
-const GRID_OFFSET_Y: int = 80
+const CELL_W: int = 100
+const CELL_H: int = 100
+const OFFSET_X: int = 40
+const OFFSET_Y: int = 80
 
-# 网格占用状态
 var grid: Array = []
-
-# 悬停高亮
 var hovered_cell: Dictionary = { "row": -1, "col": -1 }
+var anim_time: float = 0.0
 
-# 塔场景路径映射
 var tower_scenes = {
 	GameData.PlantType.PEASHOOTER: "res://scenes/peashooter.tscn",
 	GameData.PlantType.SNOW_PEA: "res://scenes/snow_pea.tscn",
@@ -31,6 +28,10 @@ func _ready() -> void:
 	_initialize_grid()
 	queue_redraw()
 
+func _process(delta: float) -> void:
+	anim_time += delta
+	queue_redraw()
+
 func _initialize_grid() -> void:
 	grid.clear()
 	for r in range(ROWS):
@@ -40,43 +41,34 @@ func _initialize_grid() -> void:
 		grid.append(row_data)
 
 func world_to_grid(world_pos: Vector2) -> Dictionary:
-	var col = int((world_pos.x - GRID_OFFSET_X) / CELL_WIDTH)
-	var row = int((world_pos.y - GRID_OFFSET_Y) / CELL_HEIGHT)
+	var col = int((world_pos.x - OFFSET_X) / CELL_W)
+	var row = int((world_pos.y - OFFSET_Y) / CELL_H)
 	return { "row": row, "col": col }
 
 func grid_to_world(row: int, col: int) -> Vector2:
-	return Vector2(
-		GRID_OFFSET_X + col * CELL_WIDTH + CELL_WIDTH / 2.0,
-		GRID_OFFSET_Y + row * CELL_HEIGHT + CELL_HEIGHT / 2.0
-	)
+	return Vector2(OFFSET_X + col * CELL_W + CELL_W / 2.0, OFFSET_Y + row * CELL_H + CELL_H / 2.0)
 
 func is_valid_cell(row: int, col: int) -> bool:
 	return row >= 0 and row < ROWS and col >= 0 and col < COLS
 
 func is_cell_empty(row: int, col: int) -> bool:
-	if not is_valid_cell(row, col):
-		return false
+	if not is_valid_cell(row, col): return false
 	return grid[row][col] == null
 
 func place_plant(row: int, col: int, plant_type: int) -> bool:
-	if not is_cell_empty(row, col):
-		return false
+	if not is_cell_empty(row, col): return false
 	grid[row][col] = plant_type
-
-	# 实例化塔场景
 	var scene_path = tower_scenes.get(plant_type, "")
 	if not scene_path.is_empty():
-		var tower_scene = load(scene_path)
-		if tower_scene:
-			var tower = tower_scene.instantiate()
+		var scene = load(scene_path)
+		if scene:
+			var tower = scene.instantiate()
 			tower.position = grid_to_world(row, col)
 			tower.setup(plant_type, self)
 			tower.row = row
 			tower.col = col
-			var towers_container = get_node_or_null("../Towers")
-			if towers_container:
-				towers_container.add_child(tower)
-
+			var tc = get_node_or_null("../Towers")
+			if tc: tc.add_child(tower)
 	plant_placed.emit(row, col, plant_type)
 	return true
 
@@ -86,113 +78,126 @@ func remove_plant(row: int, col: int) -> void:
 		plant_removed.emit(row, col)
 
 func get_plant_at(row: int, col: int):
-	if not is_valid_cell(row, col):
-		return null
-	return grid[row][col]
+	return grid[row][col] if is_valid_cell(row, col) else null
 
 func get_enemies_in_row(row: int) -> Array:
-	var enemies_in_row = []
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if enemy.row == row and enemy.is_alive:
-			enemies_in_row.append(enemy)
-	enemies_in_row.sort_custom(func(a, b): return a.position.x > b.position.x)
-	return enemies_in_row
+	var arr = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e.row == row and e.is_alive: arr.append(e)
+	arr.sort_custom(func(a, b): return a.position.x > b.position.x)
+	return arr
 
 func get_cells_in_range(row: int, col: int, radius: int = 1) -> Array:
 	var cells = []
 	for r in range(max(0, row - radius), min(ROWS, row + radius + 1)):
 		for c in range(max(0, col - radius), min(COLS, col + radius + 1)):
-			cells.append({ "row": r, "col": c })
+			cells.append({"row": r, "col": c})
 	return cells
 
 func get_enemies_in_range(row: int, col: int, radius: int = 1) -> Array:
 	var enemies = []
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if not enemy.is_alive:
-			continue
-		if abs(enemy.row - row) <= radius and abs(enemy.col - col) <= radius:
-			enemies.append(enemy)
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not e.is_alive: continue
+		if abs(e.row - row) <= radius and abs(e.col - col) <= radius:
+			enemies.append(e)
 	return enemies
 
-# 获取阳光管理器
 func get_sun_manager() -> Node:
 	return get_node_or_null("/root/Main/GameManager/SunManager")
 
-# 鼠标输入处理
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_handle_click(event.position)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			_cancel_placement()
-
-	# 悬停追踪
 	if event is InputEventMouseMotion:
 		_update_hover(event.position)
 
-# 处理点击
 func _handle_click(click_pos: Vector2) -> void:
 	var cell = world_to_grid(click_pos)
-	if not is_valid_cell(cell.row, cell.col):
-		return
-
-	var card_bar = get_node_or_null("/root/Main/CardBar")
-	if not card_bar or card_bar.selected_plant < 0:
-		return
-
-	# 尝试放置
+	if not is_valid_cell(cell.row, cell.col): return
+	var cb = get_node_or_null("/root/Main/CardBar")
+	if not cb or cb.selected_plant < 0: return
 	var gm = get_node_or_null("/root/Main/GameManager")
-	if not gm:
-		return
+	if not gm: return
+	var pt = cb.selected_plant
+	if not is_cell_empty(cell.row, cell.col): return
+	if not gm.spend_sun(GameData.get_cost(pt)): return
+	place_plant(cell.row, cell.col, pt)
+	cb.deselect_all()
 
-	var plant_type = card_bar.selected_plant
-	if not is_cell_empty(cell.row, cell.col):
-		return
-
-	var cost = GameData.get_cost(plant_type)
-	if not gm.spend_sun(cost):
-		return  # 阳光不够
-
-	place_plant(cell.row, cell.col, plant_type)
-	card_bar.deselect_all()
-
-# 取消选择
 func _cancel_placement() -> void:
-	var card_bar = get_node_or_null("/root/Main/CardBar")
-	if card_bar:
-		card_bar.deselect_all()
+	var cb = get_node_or_null("/root/Main/CardBar")
+	if cb: cb.deselect_all()
 
-# 更新悬停高亮
 func _update_hover(mouse_pos: Vector2) -> void:
 	var cell = world_to_grid(mouse_pos)
-	if cell.row == hovered_cell.row and cell.col == hovered_cell.col:
-		return  # 未变化
-
+	if cell.row == hovered_cell.row and cell.col == hovered_cell.col: return
 	hovered_cell = cell
-	queue_redraw()
 
-# 渲染网格
+# ============== 渲染 ==============
+
 func _draw() -> void:
+	_draw_lawn()
+	_draw_grid_lines()
+	_draw_path_markers()
+	_draw_hover()
+
+func _draw_lawn() -> void:
+	var total_w = COLS * CELL_W
+	var total_h = ROWS * CELL_H
+	# 外围深色土壤
+	draw_rect(Rect2(OFFSET_X - 8, OFFSET_Y - 8, total_w + 16, total_h + 16), Color(0.25, 0.18, 0.1), true)
+	# 整体草地底色
+	draw_rect(Rect2(OFFSET_X, OFFSET_Y, total_w, total_h), Color(0.25, 0.45, 0.15))
+	# 每个格子
 	for r in range(ROWS):
 		for c in range(COLS):
-			var pos = Vector2(
-				GRID_OFFSET_X + c * CELL_WIDTH,
-				GRID_OFFSET_Y + r * CELL_HEIGHT
-			)
-			var color = Color(0.3, 0.6, 0.2)
-			if (r + c) % 2 == 0:
-				color = Color(0.35, 0.65, 0.25)
-			draw_rect(Rect2(pos, Vector2(CELL_WIDTH, CELL_HEIGHT)), color)
-			draw_rect(Rect2(pos, Vector2(CELL_WIDTH, CELL_HEIGHT)), Color(0.2, 0.4, 0.15), false, 1.0)
+			var x = OFFSET_X + c * CELL_W
+			var y = OFFSET_Y + r * CELL_H
+			var shade = 1.0 + sin((r + c) * 1.2 + anim_time * 0.3) * 0.05
+			var c1 = Color(0.22, 0.50, 0.14) * shade
+			var c2 = Color(0.28, 0.55, 0.18) * shade
+			draw_rect(Rect2(x, y, CELL_W, CELL_H), c1 if (r + c) % 2 == 0 else c2)
+			# 草地纹理点
+			_draw_grass_detail(x, y, r, c)
 
-	# 悬停高亮
-	if is_valid_cell(hovered_cell.row, hovered_cell.col):
-		var hl_pos = Vector2(
-			GRID_OFFSET_X + hovered_cell.col * CELL_WIDTH,
-			GRID_OFFSET_Y + hovered_cell.row * CELL_HEIGHT
-		)
-		var card_bar = get_node_or_null("/root/Main/CardBar")
-		if card_bar and card_bar.selected_plant >= 0:
-			var is_empty = is_cell_empty(hovered_cell.row, hovered_cell.col)
-			var hl_color = Color(1.0, 1.0, 1.0, 0.4) if is_empty else Color(1.0, 0.2, 0.2, 0.4)
-			draw_rect(Rect2(hl_pos, Vector2(CELL_WIDTH, CELL_HEIGHT)), hl_color)
+func _draw_grass_detail(x: float, y: float, r: int, c: int) -> void:
+	var seed = (r * 31 + c * 17) % 100
+	for i in range(3):
+		var gx = x + 12 + (seed + i * 23) % 76
+		var gy = y + 12 + (seed + i * 37) % 76
+		draw_circle(Vector2(gx, gy), 2.0, Color(0.15, 0.40, 0.10, 0.3))
+
+func _draw_grid_lines() -> void:
+	var line_color = Color(0.15, 0.35, 0.10, 0.4)
+	for r in range(ROWS + 1):
+		var y = OFFSET_Y + r * CELL_H
+		draw_line(Vector2(OFFSET_X, y), Vector2(OFFSET_X + COLS * CELL_W, y), line_color, 1.0)
+	for c in range(COLS + 1):
+		var x = OFFSET_X + c * CELL_W
+		draw_line(Vector2(x, OFFSET_Y), Vector2(x, OFFSET_Y + ROWS * CELL_H), line_color, 1.0)
+
+func _draw_path_markers() -> void:
+	# 左侧小径（敌人目标）
+	var path_color = Color(0.6, 0.55, 0.4, 0.6)
+	draw_rect(Rect2(OFFSET_X - 4, OFFSET_Y, 4, ROWS * CELL_H), path_color)
+	# "基地"标记
+	for r in range(ROWS):
+		var y = OFFSET_Y + r * CELL_H + CELL_H / 2.0
+		draw_circle(Vector2(OFFSET_X - 6, y), 5, Color(0.8, 0.2, 0.2, 0.7))
+	# 右侧敌人入口
+	var entry_color = Color(0.5, 0.2, 0.2, 0.4)
+	draw_rect(Rect2(OFFSET_X + COLS * CELL_W, OFFSET_Y, 6, ROWS * CELL_H), entry_color)
+
+func _draw_hover() -> void:
+	if not is_valid_cell(hovered_cell.row, hovered_cell.col): return
+	var x = OFFSET_X + hovered_cell.col * CELL_W
+	var y = OFFSET_Y + hovered_cell.row * CELL_H
+	var cb = get_node_or_null("/root/Main/CardBar")
+	if cb and cb.selected_plant >= 0:
+		var can = is_cell_empty(hovered_cell.row, hovered_cell.col)
+		var hl = Color(1.0, 1.0, 0.3, 0.45) if can else Color(1.0, 0.15, 0.15, 0.45)
+		draw_rect(Rect2(x + 2, y + 2, CELL_W - 4, CELL_H - 4), hl)
+		draw_rect(Rect2(x, y, CELL_W, CELL_H), hl.lightened(0.2), false, 2.0)
